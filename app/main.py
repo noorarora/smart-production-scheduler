@@ -1,6 +1,8 @@
 from fastapi import FastAPI, HTTPException
 from app.engine.scheduler import ScheduleEngine
 from app.models.schemas import ScheduleOutput, ScheduleRequest
+from app.database.seed_data import get_default_factory_setup
+
 
 app = FastAPI(
     title="Smart Production Scheduler API",
@@ -29,3 +31,10 @@ def create_schedule(request: ScheduleRequest):
     engine = ScheduleEngine(machines=request.machines)
     result = engine.schedule(jobs=request.jobs)
     return result
+
+@app.post("/schedule/demo", response_model=ScheduleOutput)
+def run_demo_simulation():
+    """Runs scheduling heuristic on a pre-configured 3-stage manufacturing scenario."""
+    machines, jobs = get_default_factory_setup()
+    engine = ScheduleEngine(machines=machines)
+    return engine.schedule(jobs=jobs)
