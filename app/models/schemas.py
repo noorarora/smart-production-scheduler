@@ -39,3 +39,7 @@ class ScheduleOutput(BaseModel):
     tasks: List[ScheduledTask]
     makespan_minutes: int
     unassigned_jobs: List[str] = Field(default_factory=list)
+
+class ScheduleRequest(BaseModel):
+    machines: List[Machine]
+    jobs: List[Job]
