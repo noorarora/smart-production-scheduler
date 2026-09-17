@@ -1,5 +1,5 @@
 from enum import IntEnum
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -14,6 +14,8 @@ class Machine(BaseModel):
     id: str
     name: str
     capabilities: List[str] = Field(default_factory=list)
+    vessel: Optional[str] = None
+    lane: Optional[str] = None
 
 
 class Job(BaseModel):
@@ -26,6 +28,8 @@ class Job(BaseModel):
         default_factory=list,
         description="IDs of prerequisite jobs that must complete before this job can start",
     )
+    category: Optional[str] = None
+    status: str = "Scheduled"
 
 
 class ScheduledTask(BaseModel):
@@ -39,6 +43,7 @@ class ScheduleOutput(BaseModel):
     tasks: List[ScheduledTask]
     makespan_minutes: int
     unassigned_jobs: List[str] = Field(default_factory=list)
+
 
 class ScheduleRequest(BaseModel):
     machines: List[Machine]
