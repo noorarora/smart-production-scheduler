@@ -1,15 +1,40 @@
-from typing import Dict, List, Set
+from typing import Dict, List
 from app.models.schemas import Job, Machine, ScheduleOutput, ScheduledTask
 
 
 class ScheduleEngine:
     """Deterministic heuristic scheduler using priority-based greedy dispatching
 
-    with precedence and machine capability constraints.
+    with precedence, machine capability, and machine availability constraints.
     """
 
     def __init__(self, machines: List[Machine]):
         self.machines = {m.id: m for m in machines}
+
+    @staticmethod
+    def _next_available_start(
+        machine: Machine,
+        earliest_start: int,
+        duration_minutes: int,
+    ) -> int:
+        """Return the earliest start that does not overlap machine downtime."""
+        candidate_start = earliest_start
+
+        for window in sorted(
+            machine.unavailable_windows,
+            key=lambda item: item.start_minute,
+        ):
+            candidate_end = candidate_start + duration_minutes
+
+            if candidate_end <= window.start_minute:
+                break
+
+            if candidate_start >= window.end_minute:
+                continue
+
+            candidate_start = window.end_minute
+
+        return candidate_start
 
     def schedule(self, jobs: List[Job]) -> ScheduleOutput:
         scheduled_tasks: List[ScheduledTask] = []
@@ -60,7 +85,13 @@ class ScheduleEngine:
             best_end_time = float("inf")
 
             for m_id in compatible_machines:
-                possible_start = max(machine_free_at[m_id], dep_finish_time)
+                machine = self.machines[m_id]
+                earliest_start = max(machine_free_at[m_id], dep_finish_time)
+                possible_start = self._next_available_start(
+                    machine=machine,
+                    earliest_start=earliest_start,
+                    duration_minutes=job_to_schedule.duration_minutes,
+                )
                 possible_end = possible_start + job_to_schedule.duration_minutes
 
                 if possible_end < best_end_time:

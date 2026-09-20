@@ -1,6 +1,6 @@
 import pytest
 from app.engine.scheduler import ScheduleEngine
-from app.models.schemas import Job, JobPriority, Machine
+from app.models.schemas import Job, JobPriority, Machine, TimeWindow
 
 
 @pytest.fixture
@@ -106,3 +106,76 @@ def test_cyclic_dependency_handled_gracefully(mock_factory_machines):
     assert len(result.tasks) == 0
     assert "J1" in result.unassigned_jobs
     assert "J2" in result.unassigned_jobs
+
+
+def test_machine_downtime_delays_overlapping_job():
+    machine = Machine(
+        id="M1",
+        name="Mixer",
+        capabilities=["mixing"],
+        unavailable_windows=[TimeWindow(start_minute=30, end_minute=90)],
+    )
+    engine = ScheduleEngine(machines=[machine])
+    job = Job(
+        id="J1",
+        name="Long mix",
+        required_capability="mixing",
+        duration_minutes=60,
+    )
+
+    result = engine.schedule([job])
+    task = result.tasks[0]
+
+    assert task.start_time == 90
+    assert task.end_time == 150
+
+
+def test_job_can_finish_before_machine_downtime():
+    machine = Machine(
+        id="M1",
+        name="Mixer",
+        capabilities=["mixing"],
+        unavailable_windows=[TimeWindow(start_minute=30, end_minute=90)],
+    )
+    engine = ScheduleEngine(machines=[machine])
+    job = Job(
+        id="J1",
+        name="Quick mix",
+        required_capability="mixing",
+        duration_minutes=20,
+    )
+
+    result = engine.schedule([job])
+    task = result.tasks[0]
+
+    assert task.start_time == 0
+    assert task.end_time == 20
+
+
+def test_scheduler_prefers_available_compatible_machine():
+    machines = [
+        Machine(
+            id="M1",
+            name="Mixer on maintenance",
+            capabilities=["mixing"],
+            unavailable_windows=[TimeWindow(start_minute=0, end_minute=120)],
+        ),
+        Machine(
+            id="M2",
+            name="Backup mixer",
+            capabilities=["mixing"],
+        ),
+    ]
+    engine = ScheduleEngine(machines=machines)
+    job = Job(
+        id="J1",
+        name="Priority mix",
+        required_capability="mixing",
+        duration_minutes=45,
+    )
+
+    result = engine.schedule([job])
+    task = result.tasks[0]
+
+    assert task.machine_id == "M2"
+    assert task.start_time == 0

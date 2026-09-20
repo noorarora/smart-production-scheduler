@@ -10,10 +10,25 @@ class JobPriority(IntEnum):
     CRITICAL = 4
 
 
+class TimeWindow(BaseModel):
+    start_minute: int = Field(ge=0)
+    end_minute: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def validate_window(self):
+        if self.end_minute <= self.start_minute:
+            raise ValueError("Availability window end must be after start")
+        return self
+
+
 class Machine(BaseModel):
     id: str
     name: str
     capabilities: List[str] = Field(default_factory=list)
+    unavailable_windows: List[TimeWindow] = Field(
+        default_factory=list,
+        description="Machine downtime intervals in minutes from schedule start",
+    )
 
 
 class Job(BaseModel):
