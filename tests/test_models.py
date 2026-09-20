@@ -69,3 +69,58 @@ def test_schedule_request_rejects_self_dependency():
 
     with pytest.raises(ValidationError, match="cannot depend on itself"):
         ScheduleRequest(machines=[], jobs=[job])
+
+
+def test_schedule_request_rejects_indirect_dependency_cycle():
+    jobs = [
+        Job(
+            id="J1",
+            name="Mixing",
+            required_capability="mixing",
+            duration_minutes=10,
+            depends_on=["J2"],
+        ),
+        Job(
+            id="J2",
+            name="Sterilisation",
+            required_capability="autoclave",
+            duration_minutes=10,
+            depends_on=["J3"],
+        ),
+        Job(
+            id="J3",
+            name="Packaging",
+            required_capability="packaging",
+            duration_minutes=10,
+            depends_on=["J1"],
+        ),
+    ]
+
+    with pytest.raises(
+        ValidationError,
+        match=r"Dependency cycle detected: J1 -> J2 -> J3 -> J1",
+    ):
+        ScheduleRequest(machines=[], jobs=jobs)
+
+
+def test_schedule_request_accepts_valid_dependency_chain():
+    jobs = [
+        Job(id="J1", name="Mixing", required_capability="mixing", duration_minutes=10),
+        Job(
+            id="J2",
+            name="Sterilisation",
+            required_capability="autoclave",
+            duration_minutes=10,
+            depends_on=["J1"],
+        ),
+        Job(
+            id="J3",
+            name="Packaging",
+            required_capability="packaging",
+            duration_minutes=10,
+            depends_on=["J2"],
+        ),
+    ]
+
+    request = ScheduleRequest(machines=[], jobs=jobs)
+    assert [job.id for job in request.jobs] == ["J1", "J2", "J3"]

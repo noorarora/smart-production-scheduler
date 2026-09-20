@@ -56,6 +56,8 @@ class ScheduleRequest(BaseModel):
             raise ValueError("Job IDs must be unique")
 
         known_job_ids = set(job_ids)
+        dependency_graph = {job.id: job.depends_on for job in self.jobs}
+
         for job in self.jobs:
             if job.id in job.depends_on:
                 raise ValueError(f"Job '{job.id}' cannot depend on itself")
@@ -66,5 +68,33 @@ class ScheduleRequest(BaseModel):
                 raise ValueError(
                     f"Job '{job.id}' references unknown dependencies: {missing}"
                 )
+
+        visiting = set()
+        visited = set()
+        path: List[str] = []
+
+        def visit(job_id: str) -> None:
+            if job_id in visiting:
+                cycle_start = path.index(job_id)
+                cycle = path[cycle_start:] + [job_id]
+                raise ValueError(
+                    f"Dependency cycle detected: {' -> '.join(cycle)}"
+                )
+
+            if job_id in visited:
+                return
+
+            visiting.add(job_id)
+            path.append(job_id)
+
+            for dependency_id in dependency_graph[job_id]:
+                visit(dependency_id)
+
+            path.pop()
+            visiting.remove(job_id)
+            visited.add(job_id)
+
+        for job_id in job_ids:
+            visit(job_id)
 
         return self
