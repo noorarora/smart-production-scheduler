@@ -1,5 +1,5 @@
 from enum import IntEnum
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -37,6 +37,11 @@ class Job(BaseModel):
     required_capability: str
     duration_minutes: int = Field(gt=0, description="Duration must be positive")
     priority: JobPriority = JobPriority.MEDIUM
+    due_minute: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Target completion time in minutes from schedule start",
+    )
     depends_on: List[str] = Field(
         default_factory=list,
         description="IDs of prerequisite jobs that must complete before this job can start",
@@ -48,12 +53,16 @@ class ScheduledTask(BaseModel):
     machine_id: str
     start_time: int  # Minutes from start of simulation (T=0)
     end_time: int
+    due_minute: Optional[int] = None
+    lateness_minutes: int = Field(default=0, ge=0)
 
 
 class ScheduleOutput(BaseModel):
     tasks: List[ScheduledTask]
     makespan_minutes: int
     unassigned_jobs: List[str] = Field(default_factory=list)
+    late_jobs: List[str] = Field(default_factory=list)
+    total_tardiness_minutes: int = Field(default=0, ge=0)
 
 
 class ScheduleRequest(BaseModel):

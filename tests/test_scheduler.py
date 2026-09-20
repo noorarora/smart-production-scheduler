@@ -179,3 +179,70 @@ def test_scheduler_prefers_available_compatible_machine():
 
     assert task.machine_id == "M2"
     assert task.start_time == 0
+
+
+def test_earlier_due_date_breaks_equal_priority_tie():
+    machine = Machine(id="M1", name="Mixer", capabilities=["mixing"])
+    engine = ScheduleEngine(machines=[machine])
+    later_due = Job(
+        id="LATER",
+        name="Later order",
+        required_capability="mixing",
+        duration_minutes=30,
+        priority=JobPriority.HIGH,
+        due_minute=120,
+    )
+    earlier_due = Job(
+        id="EARLIER",
+        name="Earlier order",
+        required_capability="mixing",
+        duration_minutes=30,
+        priority=JobPriority.HIGH,
+        due_minute=45,
+    )
+
+    result = engine.schedule([later_due, earlier_due])
+    earlier_task = next(t for t in result.tasks if t.job_id == "EARLIER")
+    later_task = next(t for t in result.tasks if t.job_id == "LATER")
+
+    assert earlier_task.start_time == 0
+    assert later_task.start_time == 30
+
+
+def test_lateness_metrics_record_tardy_job():
+    machine = Machine(id="M1", name="Mixer", capabilities=["mixing"])
+    engine = ScheduleEngine(machines=[machine])
+    job = Job(
+        id="J1",
+        name="Tight due date",
+        required_capability="mixing",
+        duration_minutes=60,
+        due_minute=45,
+    )
+
+    result = engine.schedule([job])
+    task = result.tasks[0]
+
+    assert task.due_minute == 45
+    assert task.lateness_minutes == 15
+    assert result.late_jobs == ["J1"]
+    assert result.total_tardiness_minutes == 15
+
+
+def test_job_without_due_date_has_zero_lateness():
+    machine = Machine(id="M1", name="Mixer", capabilities=["mixing"])
+    engine = ScheduleEngine(machines=[machine])
+    job = Job(
+        id="J1",
+        name="No due date",
+        required_capability="mixing",
+        duration_minutes=25,
+    )
+
+    result = engine.schedule([job])
+    task = result.tasks[0]
+
+    assert task.due_minute is None
+    assert task.lateness_minutes == 0
+    assert result.late_jobs == []
+    assert result.total_tardiness_minutes == 0

@@ -5,7 +5,7 @@ from app.models.schemas import Job, Machine, ScheduleOutput, ScheduledTask
 class ScheduleEngine:
     """Deterministic heuristic scheduler using priority-based greedy dispatching
 
-    with precedence, machine capability, and machine availability constraints.
+    with precedence, machine capability, availability, and due-date constraints.
     """
 
     def __init__(self, machines: List[Machine]):
@@ -39,6 +39,8 @@ class ScheduleEngine:
     def schedule(self, jobs: List[Job]) -> ScheduleOutput:
         scheduled_tasks: List[ScheduledTask] = []
         unassigned_jobs: List[str] = []
+        late_jobs: List[str] = []
+        total_tardiness_minutes = 0
 
         machine_free_at: Dict[str, int] = {m_id: 0 for m_id in self.machines}
         job_completion_times: Dict[str, int] = {}
@@ -56,7 +58,11 @@ class ScheduleEngine:
                 break
 
             ready_jobs.sort(
-                key=lambda j: (-int(j.priority), j.duration_minutes)
+                key=lambda j: (
+                    -int(j.priority),
+                    j.due_minute if j.due_minute is not None else float("inf"),
+                    j.duration_minutes,
+                )
             )
             job_to_schedule = ready_jobs[0]
 
@@ -99,13 +105,25 @@ class ScheduleEngine:
                     best_start_time = possible_start
                     best_machine_id = m_id
 
+            lateness_minutes = (
+                max(0, int(best_end_time) - job_to_schedule.due_minute)
+                if job_to_schedule.due_minute is not None
+                else 0
+            )
+
             task = ScheduledTask(
                 job_id=job_to_schedule.id,
                 machine_id=best_machine_id,
                 start_time=best_start_time,
                 end_time=best_end_time,
+                due_minute=job_to_schedule.due_minute,
+                lateness_minutes=lateness_minutes,
             )
             scheduled_tasks.append(task)
+
+            if lateness_minutes > 0:
+                late_jobs.append(job_to_schedule.id)
+                total_tardiness_minutes += lateness_minutes
 
             machine_free_at[best_machine_id] = best_end_time
             job_completion_times[job_to_schedule.id] = best_end_time
@@ -121,4 +139,6 @@ class ScheduleEngine:
             tasks=scheduled_tasks,
             makespan_minutes=makespan,
             unassigned_jobs=unassigned_jobs,
+            late_jobs=late_jobs,
+            total_tardiness_minutes=total_tardiness_minutes,
         )
