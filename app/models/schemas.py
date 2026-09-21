@@ -29,6 +29,14 @@ class Machine(BaseModel):
         default_factory=list,
         description="Machine downtime intervals in minutes from schedule start",
     )
+    changeover_minutes: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Setup time applied when consecutive jobs on this machine switch "
+            "between different product families"
+        ),
+    )
 
 
 class Job(BaseModel):
@@ -37,6 +45,11 @@ class Job(BaseModel):
     required_capability: str
     duration_minutes: int = Field(gt=0, description="Duration must be positive")
     priority: JobPriority = JobPriority.MEDIUM
+    product_family: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        description="Generic product family used for sequence-dependent changeovers",
+    )
     due_minute: Optional[int] = Field(
         default=None,
         ge=0,
@@ -51,7 +64,10 @@ class Job(BaseModel):
 class ScheduledTask(BaseModel):
     job_id: str
     machine_id: str
-    start_time: int  # Minutes from start of simulation (T=0)
+    product_family: Optional[str] = None
+    setup_start_time: int
+    setup_minutes: int = Field(default=0, ge=0)
+    start_time: int  # Processing start, after any setup/changeover
     end_time: int
     due_minute: Optional[int] = None
     lateness_minutes: int = Field(default=0, ge=0)
@@ -63,6 +79,7 @@ class ScheduleOutput(BaseModel):
     unassigned_jobs: List[str] = Field(default_factory=list)
     late_jobs: List[str] = Field(default_factory=list)
     total_tardiness_minutes: int = Field(default=0, ge=0)
+    total_setup_minutes: int = Field(default=0, ge=0)
 
 
 class ScheduleRequest(BaseModel):

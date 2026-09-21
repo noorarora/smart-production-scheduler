@@ -1,11 +1,12 @@
-from typing import Dict, List
+from typing import Dict, List, Optional
 from app.models.schemas import Job, Machine, ScheduleOutput, ScheduledTask
 
 
 class ScheduleEngine:
     """Deterministic heuristic scheduler using priority-based greedy dispatching
 
-    with precedence, machine capability, availability, and due-date constraints.
+    with precedence, machine capability, availability, due-date, and changeover
+    constraints.
     """
 
     def __init__(self, machines: List[Machine]):
@@ -36,13 +37,32 @@ class ScheduleEngine:
 
         return candidate_start
 
+    @staticmethod
+    def _changeover_minutes(
+        machine: Machine,
+        previous_product_family: Optional[str],
+        next_product_family: Optional[str],
+    ) -> int:
+        """Return setup time when a machine switches between known product families."""
+        if (
+            previous_product_family is None
+            or next_product_family is None
+            or previous_product_family == next_product_family
+        ):
+            return 0
+        return machine.changeover_minutes
+
     def schedule(self, jobs: List[Job]) -> ScheduleOutput:
         scheduled_tasks: List[ScheduledTask] = []
         unassigned_jobs: List[str] = []
         late_jobs: List[str] = []
         total_tardiness_minutes = 0
+        total_setup_minutes = 0
 
         machine_free_at: Dict[str, int] = {m_id: 0 for m_id in self.machines}
+        machine_product_family: Dict[str, Optional[str]] = {
+            m_id: None for m_id in self.machines
+        }
         job_completion_times: Dict[str, int] = {}
         pending_jobs: Dict[str, Job] = {j.id: j for j in jobs}
 
@@ -87,23 +107,34 @@ class ScheduleEngine:
             )
 
             best_machine_id = None
-            best_start_time = float("inf")
+            best_setup_start = 0
+            best_processing_start = 0
             best_end_time = float("inf")
+            best_setup_minutes = 0
 
             for m_id in compatible_machines:
                 machine = self.machines[m_id]
-                earliest_start = max(machine_free_at[m_id], dep_finish_time)
-                possible_start = self._next_available_start(
+                setup_minutes = self._changeover_minutes(
                     machine=machine,
-                    earliest_start=earliest_start,
-                    duration_minutes=job_to_schedule.duration_minutes,
+                    previous_product_family=machine_product_family[m_id],
+                    next_product_family=job_to_schedule.product_family,
                 )
-                possible_end = possible_start + job_to_schedule.duration_minutes
+                earliest_setup_start = max(machine_free_at[m_id], dep_finish_time)
+                occupied_duration = setup_minutes + job_to_schedule.duration_minutes
+                setup_start = self._next_available_start(
+                    machine=machine,
+                    earliest_start=earliest_setup_start,
+                    duration_minutes=occupied_duration,
+                )
+                processing_start = setup_start + setup_minutes
+                possible_end = processing_start + job_to_schedule.duration_minutes
 
                 if possible_end < best_end_time:
                     best_end_time = possible_end
-                    best_start_time = possible_start
+                    best_setup_start = setup_start
+                    best_processing_start = processing_start
                     best_machine_id = m_id
+                    best_setup_minutes = setup_minutes
 
             lateness_minutes = (
                 max(0, int(best_end_time) - job_to_schedule.due_minute)
@@ -114,19 +145,25 @@ class ScheduleEngine:
             task = ScheduledTask(
                 job_id=job_to_schedule.id,
                 machine_id=best_machine_id,
-                start_time=best_start_time,
+                product_family=job_to_schedule.product_family,
+                setup_start_time=best_setup_start,
+                setup_minutes=best_setup_minutes,
+                start_time=best_processing_start,
                 end_time=best_end_time,
                 due_minute=job_to_schedule.due_minute,
                 lateness_minutes=lateness_minutes,
             )
             scheduled_tasks.append(task)
+            total_setup_minutes += best_setup_minutes
 
             if lateness_minutes > 0:
                 late_jobs.append(job_to_schedule.id)
                 total_tardiness_minutes += lateness_minutes
 
-            machine_free_at[best_machine_id] = best_end_time
-            job_completion_times[job_to_schedule.id] = best_end_time
+            machine_free_at[best_machine_id] = int(best_end_time)
+            if job_to_schedule.product_family is not None:
+                machine_product_family[best_machine_id] = job_to_schedule.product_family
+            job_completion_times[job_to_schedule.id] = int(best_end_time)
             del pending_jobs[job_to_schedule.id]
 
         makespan = (
@@ -141,4 +178,5 @@ class ScheduleEngine:
             unassigned_jobs=unassigned_jobs,
             late_jobs=late_jobs,
             total_tardiness_minutes=total_tardiness_minutes,
+            total_setup_minutes=total_setup_minutes,
         )
