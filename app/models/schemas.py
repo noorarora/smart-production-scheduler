@@ -1,5 +1,5 @@
 from enum import IntEnum
-from typing import List, Optional
+from typing import Dict, List, Optional
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -33,10 +33,31 @@ class Machine(BaseModel):
         default=0,
         ge=0,
         description=(
-            "Setup time applied when consecutive jobs on this machine switch "
-            "between different product families"
+            "Fallback setup time applied when consecutive jobs switch between "
+            "different product families"
         ),
     )
+    changeover_matrix: Dict[str, Dict[str, int]] = Field(
+        default_factory=dict,
+        description=(
+            "Optional directional product-family setup matrix. Specific transitions "
+            "override the fallback changeover_minutes value"
+        ),
+    )
+
+    @model_validator(mode="after")
+    def validate_changeover_matrix(self):
+        for source_family, destinations in self.changeover_matrix.items():
+            if not source_family.strip():
+                raise ValueError("Changeover matrix source family cannot be blank")
+
+            for target_family, minutes in destinations.items():
+                if not target_family.strip():
+                    raise ValueError("Changeover matrix target family cannot be blank")
+                if minutes < 0:
+                    raise ValueError("Changeover matrix durations cannot be negative")
+
+        return self
 
 
 class Job(BaseModel):
