@@ -11,8 +11,10 @@ The current version is a heuristic MVP. It does **not** claim to be an AI/ML opt
 - Rejects duplicate IDs, unknown dependencies, self-dependencies, and indirect dependency cycles before scheduling.
 - Supports machine downtime/maintenance windows on the minute-based planning timeline.
 - Avoids assigning work across a machine's unavailable periods and can choose another compatible machine when it finishes earlier.
-- Supports per-machine setup/changeover time when consecutive jobs switch between different product families.
-- Includes setup time when comparing compatible machine finish times, so an already configured machine can be preferred when it completes the job sooner.
+- Supports per-machine fallback setup/changeover time when consecutive jobs switch between different product families.
+- Supports optional directional product-to-product changeover matrices such as `A -> B = 8` minutes and `B -> A = 20` minutes.
+- Uses a matrix transition when configured and falls back to the machine's default changeover time when a transition is missing.
+- Includes setup time when comparing compatible machine finish times, so a machine with a shorter transition can be selected even when another line becomes free earlier.
 - Prioritises higher-priority ready jobs, then earlier due dates, then shorter duration as deterministic tie-breakers.
 - Reports per-task lateness plus schedule-level late-job, total-tardiness, and total-setup-time KPIs.
 - Returns scheduled tasks, total makespan, and any jobs that could not be assigned.
@@ -51,7 +53,7 @@ Then open:
 
 ## Example request
 
-All times are expressed as minutes from the start of the planning horizon (`T=0`). `changeover_minutes` is applied only when a machine switches between two known, different `product_family` values.
+All times are expressed as minutes from the start of the planning horizon (`T=0`). `changeover_minutes` is the fallback when a machine switches between two known, different `product_family` values. `changeover_matrix` can override that fallback for individual directional transitions.
 
 ```json
 {
@@ -61,6 +63,14 @@ All times are expressed as minutes from the start of the planning horizon (`T=0`
       "name": "Prep Line",
       "capabilities": ["mixing", "dispensing"],
       "changeover_minutes": 15,
+      "changeover_matrix": {
+        "FAMILY_A": {
+          "FAMILY_B": 8
+        },
+        "FAMILY_B": {
+          "FAMILY_A": 20
+        }
+      },
       "unavailable_windows": [
         {
           "start_minute": 60,
@@ -102,6 +112,17 @@ A scheduled task can include fields such as:
 
 `setup_start_time` marks when the machine becomes occupied for any required setup. `start_time` marks processing start after setup. The schedule response also reports `makespan_minutes`, `unassigned_jobs`, `late_jobs`, `total_tardiness_minutes`, and `total_setup_minutes`.
 
+## Changeover behavior
+
+For consecutive jobs with known product families, the engine resolves setup time in this order:
+
+1. Same product family: no setup time.
+2. Matching directional entry in `changeover_matrix`: use the matrix value.
+3. No matrix entry: use `changeover_minutes` as the fallback.
+4. Missing product-family information: no sequence-dependent setup is assumed.
+
+The matrix is directional, so `A -> B` and `B -> A` may have different durations.
+
 ## Run tests
 
 ```bash
@@ -115,7 +136,7 @@ At each scheduling step the engine:
 1. Finds jobs whose prerequisites have completed.
 2. Orders ready jobs by priority, then due date, then duration.
 3. Finds machines capable of performing the selected job.
-4. Calculates sequence-dependent setup time from the machine's previous product family.
+4. Resolves sequence-dependent setup time from the machine's previous product family, using the directional matrix first and fallback setup time second.
 5. Calculates each machine's earliest feasible setup + processing window while avoiding configured downtime.
 6. Assigns the job to the compatible machine that produces the earliest finish time.
 7. Updates the machine's product-family state after the job is assigned.
@@ -126,7 +147,7 @@ This provides a deterministic baseline that can later be compared with optimisat
 ## Current limitations
 
 - Downtime windows are supported, but full repeating shift calendars are not yet modelled.
-- Changeover time is currently a single per-machine duration rather than a full product-to-product changeover matrix.
+- Changeover matrices currently use product-family names only; cleaning class, allergen risk, tooling, and operator-specific setup rules are not modelled.
 - Setup is conservatively scheduled after job prerequisites have completed; anticipatory setup is not modelled yet.
 - The current objective is heuristic rather than a formal global tardiness/makespan optimisation model.
 - No persistent database or user interface in this standalone repo yet.
@@ -135,7 +156,7 @@ This provides a deterministic baseline that can later be compared with optimisat
 ## Next development targets
 
 - Add shift calendars and richer machine availability rules.
-- Add product-to-product changeover matrices and cleaning/setup categories.
+- Add cleaning/setup categories on top of the product-family matrix.
 - Add schedule quality comparison for baseline vs alternative heuristics/optimisation.
 - Add persistence and schedule history.
 - Add a timeline/Gantt-style front end.
