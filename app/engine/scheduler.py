@@ -43,13 +43,20 @@ class ScheduleEngine:
         previous_product_family: Optional[str],
         next_product_family: Optional[str],
     ) -> int:
-        """Return setup time when a machine switches between known product families."""
+        """Return directional setup time for a product-family transition."""
         if (
             previous_product_family is None
             or next_product_family is None
             or previous_product_family == next_product_family
         ):
             return 0
+
+        matrix_minutes = machine.changeover_matrix.get(
+            previous_product_family, {}
+        ).get(next_product_family)
+        if matrix_minutes is not None:
+            return matrix_minutes
+
         return machine.changeover_minutes
 
     def schedule(self, jobs: List[Job]) -> ScheduleOutput:
