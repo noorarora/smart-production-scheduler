@@ -102,6 +102,10 @@ class ScheduleOutput(BaseModel):
     late_jobs: List[str] = Field(default_factory=list)
     total_tardiness_minutes: int = Field(default=0, ge=0)
     total_setup_minutes: int = Field(default=0, ge=0)
+    machine_load_minutes: Dict[str, int] = Field(
+        default_factory=dict,
+        description="Scheduled processing plus setup minutes for each machine",
+    )
 
 
 class ScheduleRequest(BaseModel):
