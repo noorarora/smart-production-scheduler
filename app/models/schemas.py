@@ -85,6 +85,7 @@ class Job(BaseModel):
 class ScheduledTask(BaseModel):
     job_id: str
     machine_id: str
+    priority: JobPriority = JobPriority.MEDIUM
     product_family: Optional[str] = None
     setup_start_time: int
     setup_minutes: int = Field(default=0, ge=0)
