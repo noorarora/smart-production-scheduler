@@ -152,6 +152,7 @@ class ScheduleEngine:
             task = ScheduledTask(
                 job_id=job_to_schedule.id,
                 machine_id=best_machine_id,
+                priority=job_to_schedule.priority,
                 product_family=job_to_schedule.product_family,
                 setup_start_time=best_setup_start,
                 setup_minutes=best_setup_minutes,
