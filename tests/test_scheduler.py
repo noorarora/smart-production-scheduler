@@ -262,3 +262,34 @@ def test_job_without_due_date_has_zero_lateness():
     assert task.lateness_minutes == 0
     assert result.late_jobs == []
     assert result.total_tardiness_minutes == 0
+
+
+def test_machine_load_includes_processing_and_changeover_time():
+    machine = Machine(
+        id="M1",
+        name="Mixer",
+        capabilities=["mixing"],
+        changeover_minutes=5,
+    )
+    engine = ScheduleEngine(machines=[machine])
+    jobs = [
+        Job(
+            id="J1",
+            name="Family A batch",
+            required_capability="mixing",
+            duration_minutes=20,
+            product_family="A",
+        ),
+        Job(
+            id="J2",
+            name="Family B batch",
+            required_capability="mixing",
+            duration_minutes=30,
+            product_family="B",
+        ),
+    ]
+
+    result = engine.schedule(jobs)
+
+    assert result.machine_load_minutes == {"M1": 55}
+    assert result.total_setup_minutes == 5
