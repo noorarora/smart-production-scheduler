@@ -67,6 +67,7 @@ class ScheduleEngine:
         total_setup_minutes = 0
 
         machine_free_at: Dict[str, int] = {m_id: 0 for m_id in self.machines}
+        machine_load_minutes: Dict[str, int] = {m_id: 0 for m_id in self.machines}
         machine_product_family: Dict[str, Optional[str]] = {
             m_id: None for m_id in self.machines
         }
@@ -163,6 +164,9 @@ class ScheduleEngine:
             )
             scheduled_tasks.append(task)
             total_setup_minutes += best_setup_minutes
+            machine_load_minutes[best_machine_id] += (
+                best_setup_minutes + job_to_schedule.duration_minutes
+            )
 
             if lateness_minutes > 0:
                 late_jobs.append(job_to_schedule.id)
@@ -187,4 +191,5 @@ class ScheduleEngine:
             late_jobs=late_jobs,
             total_tardiness_minutes=total_tardiness_minutes,
             total_setup_minutes=total_setup_minutes,
+            machine_load_minutes=machine_load_minutes,
         )
