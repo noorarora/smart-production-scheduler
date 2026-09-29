@@ -82,6 +82,22 @@ def test_priority_tiebreaking(mock_factory_machines):
     assert task_low.start_time >= task_urgent.end_time
 
 
+def test_scheduled_task_preserves_job_priority():
+    machine = Machine(id="M1", name="Mixer", capabilities=["mixing"])
+    engine = ScheduleEngine(machines=[machine])
+    job = Job(
+        id="URGENT",
+        name="Priority customer order",
+        required_capability="mixing",
+        duration_minutes=20,
+        priority=JobPriority.CRITICAL,
+    )
+
+    result = engine.schedule([job])
+
+    assert result.tasks[0].priority == JobPriority.CRITICAL
+
+
 def test_cyclic_dependency_handled_gracefully(mock_factory_machines):
     """Circular dependencies must be caught without crashing."""
     engine = ScheduleEngine(machines=mock_factory_machines)
