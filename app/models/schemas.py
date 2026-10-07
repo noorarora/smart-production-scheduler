@@ -76,6 +76,11 @@ class Job(BaseModel):
         ge=0,
         description="Target completion time in minutes from schedule start",
     )
+    release_minute: int = Field(
+        default=0,
+        ge=0,
+        description="Earliest setup start, e.g. when materials become available",
+    )
     depends_on: List[str] = Field(
         default_factory=list,
         description="IDs of prerequisite jobs that must complete before this job can start",

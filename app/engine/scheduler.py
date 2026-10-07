@@ -127,7 +127,9 @@ class ScheduleEngine:
                     previous_product_family=machine_product_family[m_id],
                     next_product_family=job_to_schedule.product_family,
                 )
-                earliest_setup_start = max(machine_free_at[m_id], dep_finish_time)
+                earliest_setup_start = max(
+                    machine_free_at[m_id], dep_finish_time, job_to_schedule.release_minute
+                )
                 occupied_duration = setup_minutes + job_to_schedule.duration_minutes
                 setup_start = self._next_available_start(
                     machine=machine,

@@ -8,6 +8,7 @@ The current version is a heuristic MVP. It does **not** claim to be an AI/ML opt
 
 - Models production jobs, priorities, durations, due dates, product families, machines, and machine capabilities.
 - Enforces prerequisite relationships between jobs.
+- Supports nonnegative `release_minute` values so setup and processing wait for materials or an order release; omitted values default to zero.
 - Rejects duplicate IDs, unknown dependencies, self-dependencies, and indirect dependency cycles before scheduling.
 - Supports machine downtime/maintenance windows on the minute-based planning timeline.
 - Avoids assigning work across a machine's unavailable periods and can choose another compatible machine when it finishes earlier.
@@ -88,6 +89,7 @@ All times are expressed as minutes from the start of the planning horizon (`T=0`
       "priority": 3,
       "product_family": "FAMILY_A",
       "due_minute": 150,
+      "release_minute": 15,
       "depends_on": []
     }
   ]
@@ -101,10 +103,10 @@ A scheduled task can include fields such as:
   "job_id": "J1",
   "machine_id": "M1",
   "product_family": "FAMILY_A",
-  "setup_start_time": 0,
+  "setup_start_time": 15,
   "setup_minutes": 0,
-  "start_time": 0,
-  "end_time": 45,
+  "start_time": 15,
+  "end_time": 60,
   "due_minute": 150,
   "lateness_minutes": 0
 }
@@ -137,7 +139,7 @@ At each scheduling step the engine:
 2. Orders ready jobs by priority, then due date, then duration.
 3. Finds machines capable of performing the selected job.
 4. Resolves sequence-dependent setup time from the machine's previous product family, using the directional matrix first and fallback setup time second.
-5. Calculates each machine's earliest feasible setup + processing window while avoiding configured downtime.
+5. Calculates each machine's earliest feasible setup + processing window after prerequisites and the job release time, while avoiding configured downtime.
 6. Assigns the job to the compatible machine that produces the earliest finish time.
 7. Updates the machine's product-family state after the job is assigned.
 8. Calculates lateness when a due date is present and aggregates tardiness and setup-time KPIs.
@@ -160,3 +162,5 @@ This provides a deterministic baseline that can later be compared with optimisat
 - Add schedule quality comparison for baseline vs alternative heuristics/optimisation.
 - Add persistence and schedule history.
 - Add a timeline/Gantt-style front end.
+
+Release times constrain setup as well as processing. For example, a 45-minute job released at minute 15 finishes at minute 60 on an otherwise available machine. The greedy dispatch order remains priority-based; it does not backfill idle gaps before a future released job.
